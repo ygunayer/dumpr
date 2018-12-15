@@ -1,0 +1,23 @@
+{
+  "name": "dumpr",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node node_modules/mocha/bin/mocha test/**/*.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chai": "4.2.0",
+    "jsdom": "13.1.0",
+    "mocha": "5.2.0",
+    "module-alias": "2.1.0",
+    "progress": "2.0.3",
+    "puppeteer-core": "1.11.0",
+    "request": "2.88.0"
+  },
+  "_moduleAliases": {
+    "@dumpr": "src/"
+  }
+}
