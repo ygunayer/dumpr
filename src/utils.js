@@ -1,3 +1,4 @@
+const _ = require('lodash');
 const os = require('os');
 const path = require('path');
 const puppeteer = require('puppeteer-core');
@@ -32,9 +33,15 @@ function loadWithoutBrowser(html) {
     return dom.window;
 }
 
+function interpolate(str, data = {}) {
+    const compiled = _.template(str);
+    return compiled(data);
+}
+
 module.exports = {
     delay,
     getActualPath,
     inBrowserDo,
-    loadWithoutBrowser
+    loadWithoutBrowser,
+    interpolate
 };

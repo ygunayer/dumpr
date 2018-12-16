@@ -9,8 +9,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "ascii-progress": "1.0.5",
     "chai": "4.2.0",
     "jsdom": "13.1.0",
+    "lodash": "4.17.11",
+    "mkdirp": "0.5.1",
     "mocha": "5.2.0",
     "module-alias": "2.1.0",
     "progress": "2.0.3",
