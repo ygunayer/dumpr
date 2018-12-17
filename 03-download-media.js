@@ -67,7 +67,7 @@ function parseItems({postId, media}) {
             post,
             media: {
                 seq,
-                type,
+                type: post.type,
                 url,
                 filename,
                 ext
@@ -80,37 +80,41 @@ async function beginDownload({from, destination, timestamp}, {overwrite = true} 
     const fullPath = path.join(destination.dir, destination.base);
     await mkdirp(destination.dir);
 
-    try {
-        await fs.stat(fullPath);
-    } catch (err) {
-        if (err.code == 'ENOENT') {
-            if (!overwrite) {
-                return;
-            }
-        } else {
-            throw err;
-        }
-    }
-    
-    const ws = fs.createWriteStream(fullPath);
-
     const emitter = new EventEmitter();
 
-    process.nextTick(() => {
+    emitter.go = () => process.nextTick(async () => {
+        try {
+            await fs.stat(fullPath);
+            if (!overwrite) {
+                emitter.emit('end');
+                return;
+            }
+        } catch (err) {
+            if (err.code != 'ENOENT') {
+                emitter.emit('error', err);
+                return;
+            }
+        }
+
+        const ws = fs.createWriteStream(fullPath);
+
         request
             .get(from)
             .on('response', response => {
                 if (response.statusCode == 200) {
                     emitter.emit('length-discovered', +response.headers['content-length']);
+                } else if (response.code >= 400) {
+                    emitter.emit('error', new Error(`Response code ${response.code}`));
                 }
             })
             .on('data', chunk => emitter.emit('tick', chunk.length))
-            .once('end', async () => {
+            .on('end', async () => {
                 await fs.utimes(fullPath, Date.now() / 1000, timestamp);
                 emitter.emit('end');
             })
+            .on('error', e => emitter.emit('error', e))
             .pipe(ws)
-            .once('error', e => emitter.emit('error', e));
+            .on('error', e => emitter.emit('error', e));
     });
 
     return emitter;
@@ -131,7 +135,7 @@ const downloadList = mediaList
 
     //console.log(JSON.stringify(downloadList, null, 4))
 
-async function downloadBulk(items, {parallelism = 8, retryCount = 2, overwrite = true} = {}) {
+async function downloadBulk(items, {parallelism = 8, retryCount = 2, overwrite = false} = {}) {
     let queue = [].concat(items);
 
     const state = {};
@@ -158,8 +162,12 @@ async function downloadBulk(items, {parallelism = 8, retryCount = 2, overwrite =
 
         while (item = queue.pop()) {
             let attempts = 0;
-            bar.setSchema(`${idx + 1}. [:bar] :percent\t:etas\t${item.destination.base}`);
-            bar.update(0);
+            try {
+                bar.setSchema(`${idx + 1}. [:bar] :percent\t:etas\t${item.destination.base}`);
+                bar.update(0);
+            } catch (err) {
+
+            }
 
             let itemState = state[item.id] = {item, status: 'downloading'};
 
@@ -167,14 +175,14 @@ async function downloadBulk(items, {parallelism = 8, retryCount = 2, overwrite =
                 bar.total = 0;
 
                 const shouldBreak = await new Promise(async resolve => {
-                    let emitter = await beginDownload(item);
+                    let emitter = await beginDownload(item, {overwrite});
                     emitter.once('length-discovered', onLengthDiscovered);
                     emitter.on('tick', onTick);
-                    emitter.once('end', () => {
+                    emitter.on('end', () => {
                         itemState.status = 'complete';
                         resolve(true);
                     });
-                    emitter.once('error', err => {
+                    emitter.on('error', err => {
                         attempts++;
 
                         if (attempts >= retryCount) {
@@ -185,6 +193,8 @@ async function downloadBulk(items, {parallelism = 8, retryCount = 2, overwrite =
                             resolve(false);
                         }
                     });
+
+                    emitter.go();
                 });
 
                 if (shouldBreak) {
